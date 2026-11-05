@@ -20,15 +20,17 @@ struct CPUUsageTests {
         #expect(CPUUsage.percent(from: a, to: a) == 0)
     }
 
-    @Test func counterWrapIsZero() {
-        let a = CPUTicks(user: 4_000_000_000, system: 0, idle: 0, nice: 0)
-        let b = CPUTicks(user: 10, system: 0, idle: 20, nice: 0)
-        #expect(CPUUsage.percent(from: a, to: b) == 0)
+    @Test func counterWrapIsMeasuredAcrossTheWrap() {
+        // 커널 tick 카운터는 32비트라 오래 켜 두면 0으로 돌아간다.
+        let a = CPUTicks(user: UInt64(UInt32.max) - 9, system: 0, idle: 100, nice: 0)
+        let b = CPUTicks(user: 10, system: 0, idle: 120, nice: 0)
+        // user Δ = 20, idle Δ = 20
+        #expect(CPUUsage.percent(from: a, to: b) == 50)
     }
 
     @Test(arguments: [(-5.0, 0.0), (150.0, 100.0), (.nan, 0.0), (.infinity, 0.0), (42.0, 42.0)])
     func clampKeepsRange(input: Double, expected: Double) {
-        #expect(CPUUsage.clamp(input) == expected)
+        #expect(Usage.clamp(input) == expected)
     }
 
     @Test func readsLiveTicks() {

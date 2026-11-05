@@ -27,11 +27,9 @@ public enum MemoryUsage {
     /// 전체 대비 사용 비율(0–100). 전체가 0이면 0.
     public static func percent(_ pages: MemoryPages) -> Double {
         guard pages.total > 0 else { return 0 }
-        return CPUUsage.clamp(Double(pages.used) / Double(pages.total) * 100)
+        return Usage.clamp(Double(pages.used) / Double(pages.total) * 100)
     }
 }
-
-private let memoryHostPort = mach_host_self()
 
 extension MemoryPages {
     /// 현재 메모리 상태. 실패하면 nil.
@@ -42,7 +40,7 @@ extension MemoryPages {
         )
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(memoryHostPort, HOST_VM_INFO64, $0, &count)
+                host_statistics64(hostPort, HOST_VM_INFO64, $0, &count)
             }
         }
         guard result == KERN_SUCCESS else { return nil }

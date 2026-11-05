@@ -26,6 +26,7 @@ struct MemoryUsageTests {
     @Test func readsLivePages() {
         let p = MemoryPages.current()
         #expect(p != nil)
+        #expect((p?.used ?? 0) <= (p?.total ?? 0))
         let percent = p.map(MemoryUsage.percent) ?? 0
         #expect(percent > 0 && percent <= 100)
     }

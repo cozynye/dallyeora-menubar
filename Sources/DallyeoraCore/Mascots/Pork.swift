@@ -11,10 +11,10 @@ struct Pork: Mascot {
         Tier(75, "탄다 탄다! 노트북 뜨거움", "다 탔다 아이가"),
     ]
 
-    func draw(in ctx: CGContext, phase p: Double, cpu: Double) {
+    func draw(in ctx: CGContext, phase p: Double, usage: Double) {
         ctx.line(3, 16, 25, 16)                                      // 불판
         for x in stride(from: 5.0, through: 23, by: 3) { ctx.line(x, 16, x, 17.4) }
-        let flip = cpu >= 75 ? cos(p * 0.7) : 1
+        let flip = usage >= 75 ? cos(p * 0.7) : 1
         let h = 3.2 * abs(flip), y0 = 14.6 - h
         ctx.fill(CGRect(x: 7, y: y0, width: 14, height: h))          // 고기
         if h > 1.4 {
@@ -22,7 +22,7 @@ struct Pork: Mascot {
             ctx.fill(CGRect(x: 7, y: y0 + h * 0.42, width: 14, height: 0.7))
             ctx.setBlendMode(.normal)
         }
-        let puffs = 1 + Int(cpu / 25)
+        let puffs = 1 + Int(usage / 25)
         for i in 0..<puffs {
             let fi = Double(i)
             let t = frac(p * 0.18 + fi / Double(puffs))

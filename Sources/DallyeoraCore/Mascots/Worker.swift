@@ -11,11 +11,11 @@ struct Worker: Mascot {
         Tier(75, "칼퇴 질주!", "퇴근한다, 비키라!"),
     ]
 
-    func draw(in ctx: CGContext, phase p: Double, cpu: Double) {
-        let lean = cpu / 100 * 2.6
-        let amp = 0.35 + cpu / 100 * 0.85
+    func draw(in ctx: CGContext, phase p: Double, usage: Double) {
+        let lean = usage / 100 * 2.6
+        let amp = 0.35 + usage / 100 * 0.85
         let hx = 13 + lean
-        if cpu >= 75 {
+        if usage >= 75 {
             for i in 0..<3 {
                 let fi = Double(i)
                 let o = (p * 3 + fi * 2).truncatingRemainder(dividingBy: 3)

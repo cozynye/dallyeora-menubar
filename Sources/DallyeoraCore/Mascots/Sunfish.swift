@@ -11,9 +11,9 @@ struct Sunfish: Mascot {
         Tier(90, "충격으로 사망… 앱 좀 꺼 주세요", "마 죽었다… 앱 좀 꺼라"),
     ]
 
-    func draw(in ctx: CGContext, phase p: Double, cpu: Double) {
-        let dead = cpu >= 90
-        let jitter = (cpu >= 50 && !dead) ? (cpu - 40) / 60 * 1.1 : 0
+    func draw(in ctx: CGContext, phase p: Double, usage: Double) {
+        let dead = usage >= 90
+        let jitter = (usage >= 50 && !dead) ? (usage - 40) / 60 * 1.1 : 0
         ctx.saveGState()
         ctx.translateBy(x: 14 + sin(p * 7.3) * jitter, y: 9 + sin(p * 0.6) * (dead ? 0.3 : 0.9))
         if dead { ctx.rotate(by: .pi) }
@@ -30,10 +30,10 @@ struct Sunfish: Mascot {
             ctx.circle(3.2, -1.4, 0.9, fill: true)
         }
         ctx.restoreGState()
-        if cpu >= 50 && !dead {
+        if usage >= 50 && !dead {
             ctx.circle(22.6, 3 + frac(p * 0.5) * 3, 0.8, fill: true)   // 땀방울
         }
-        if cpu < 25 {
+        if usage < 25 {
             let t = frac(p * 0.12)
             ctx.circle(22, 12 - t * 10, 0.9, alpha: 1 - t)             // 물방울
         }

@@ -10,16 +10,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let mascotMenu = NSMenu()
     private let toneMenu = NSMenu()
     private let metricMenu = NSMenu()
-    private var cpu: Double = 0
-    private var memory: Double = 0
+    private var sampler = UsageSampler()
     private var phase: Double = 0
-    private var lastTicks: CPUTicks?
-    private var cpuTimer: Timer?
+    private var sampleTimer: Timer?
     private var frameTimer: Timer?
 
     private var mascot: any Mascot { Mascots.find(settings.mascotID) ?? Mascots.default }
     /// 캐릭터가 반응하는 값. 설정에서 고른 지표를 따른다.
-    private var usage: Double { settings.metric == .cpu ? cpu : memory }
+    private var usage: Double { sampler.value(for: settings.metric) }
 
     init(settings: Settings) {
         self.settings = settings
@@ -28,26 +26,34 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.cell?.lineBreakMode = .byTruncatingTail
         buildMenu()
         updateLength()
-        sample()
+        sampler.sample()
         startSampleTimer()
         render()
         scheduleNextFrame()
+        // CPU는 두 번 재야 값이 나오므로 첫 2초를 0%로 보이지 않게 한 번 더 잰다.
+        let warmUp = Timer(timeInterval: 0.25, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sampler.sample() }
+        }
+        RunLoop.main.add(warmUp, forMode: .common)
     }
 
     // MARK: 타이머 — 메뉴가 열려 있어도 돌도록 .common 모드에 등록
 
     private func startSampleTimer() {
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sample() }
+            MainActor.assumeIsolated { self?.sampler.sample() }
         }
+        timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
-        cpuTimer = timer
+        sampleTimer = timer
     }
 
     private func scheduleNextFrame() {
-        let timer = Timer(timeInterval: AnimationClock.frameInterval(cpu: usage), repeats: false) { [weak self] _ in
+        let interval = AnimationClock.frameInterval(usage: usage)
+        let timer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        timer.tolerance = interval * 0.1
         RunLoop.main.add(timer, forMode: .common)
         frameTimer = timer
     }
@@ -58,31 +64,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         scheduleNextFrame()
     }
 
-    /// 지표를 바로 바꿔도 값이 있도록 CPU와 메모리를 함께 잰다.
-    private func sample() {
-        if let now = CPUTicks.current() {
-            if let last = lastTicks {
-                cpu = CPUUsage.percent(from: last, to: now)
-            }
-            lastTicks = now
-        }
-        if let pages = MemoryPages.current() {
-            memory = MemoryUsage.percent(pages)
-        }
-    }
-
     // MARK: 그리기
 
     private func render() {
         guard let button = statusItem.button else { return }
         let m = mascot
         let value = usage
-        if let cg = MascotRenderer.render(m, phase: phase, cpu: value) {
+        if let cg = MascotRenderer.render(m, phase: phase, usage: value) {
             let image = NSImage(cgImage: cg, size: MascotRenderer.size)
             image.isTemplate = true
             button.image = image
         }
-        let text = m.phrase(cpu: value, tone: settings.tone)
+        let text = m.phrase(usage: value, tone: settings.tone)
         let title = " " + text
         if button.title != title { button.title = title }
         headerItem.title = "\(m.name)    \(settings.metric.label) \(Int(value.rounded()))%"

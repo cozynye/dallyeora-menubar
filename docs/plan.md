@@ -1056,7 +1056,7 @@ Expected: `x86_64 arm64` 출력, 메뉴 막대에 개복치가 뜨고 Dock 아�
 ```markdown
 # 달려라 메뉴바 (Dallyeora)
 
-CPU를 많이 쓸수록 메뉴 막대의 캐릭터가 바빠지는 macOS 앱입니다. [RunCat](https://github.com/runcat-dev/RunCatNeo)에서 아이디어를 얻어 한국 밈 캐릭터로 만들었습니다.
+CPU를 많이 쓸수록 메뉴 막대의 캐릭터가 바빠지는 macOS 앱입니다. 한국 밈 캐릭터로 만들었습니다.
 
 | 캐릭터 | CPU 낮음 → 높음 |
 |---|---|

@@ -18,21 +18,21 @@ public struct CPUTicks: Equatable, Sendable {
 }
 
 public enum CPUUsage {
-    /// 두 측정 사이의 사용률(0–100). 카운터가 줄었거나 변화가 없으면 0.
+    /// 두 측정 사이의 사용률(0–100). 변화가 없으면 0.
+    /// 커널 카운터는 32비트라 한 번 0으로 돌아가도 차이가 맞도록 32비트로 감아서 뺀다.
     public static func percent(from old: CPUTicks, to new: CPUTicks) -> Double {
-        guard new.total > old.total, new.busy >= old.busy else { return 0 }
-        let busy = Double(new.busy - old.busy)
-        let total = Double(new.total - old.total)
-        return clamp(busy / total * 100)
-    }
-
-    /// NaN·무한대는 0, 나머지는 0–100으로 제한.
-    public static func clamp(_ cpu: Double) -> Double {
-        cpu.isFinite ? min(100, max(0, cpu)) : 0
+        func delta(_ a: UInt64, _ b: UInt64) -> UInt64 {
+            UInt64(UInt32(truncatingIfNeeded: b) &- UInt32(truncatingIfNeeded: a))
+        }
+        let busy = delta(old.user, new.user) + delta(old.system, new.system) + delta(old.nice, new.nice)
+        let total = busy + delta(old.idle, new.idle)
+        guard total > 0 else { return 0 }
+        return Usage.clamp(Double(busy) / Double(total) * 100)
     }
 }
 
-private let hostPort = mach_host_self()
+/// host_statistics 호출에 쓰는 포트. 한 번만 받아 CPU·메모리 측정이 함께 쓴다.
+let hostPort = mach_host_self()
 
 extension CPUTicks {
     /// 전체 코어 합산 tick. 실패하면 nil.

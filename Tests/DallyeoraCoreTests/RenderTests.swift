@@ -4,26 +4,26 @@ import Testing
 
 struct RenderTests {
     @Test(arguments: [0.0, 30.0, 60.0, 95.0])
-    func everyMascotDrawsVisiblePixels(cpu: Double) throws {
+    func everyMascotDrawsVisiblePixels(usage: Double) throws {
         for m in Mascots.all {
-            let image = try #require(MascotRenderer.render(m, phase: 1.0, cpu: cpu))
+            let image = try #require(MascotRenderer.render(m, phase: 1.0, usage: usage))
             #expect(image.width == 56)
             #expect(image.height == 36)
-            #expect(alphaBytes(image).filter { $0 > 0 }.count > 20, "\(m.id) at \(cpu)%")
+            #expect(alphaBytes(image).filter { $0 > 0 }.count > 20, "\(m.id) at \(usage)%")
         }
     }
 
     @Test func sunfishFlipsAtNinety() throws {
         let fish = try #require(Mascots.find("sunfish"))
-        let alive = try #require(MascotRenderer.render(fish, phase: 0, cpu: 89))
-        let dead = try #require(MascotRenderer.render(fish, phase: 0, cpu: 90))
+        let alive = try #require(MascotRenderer.render(fish, phase: 0, usage: 89))
+        let dead = try #require(MascotRenderer.render(fish, phase: 0, usage: 90))
         #expect(alphaBytes(alive) != alphaBytes(dead))
     }
 
     @Test(arguments: [Double.nan, -20.0, 400.0])
-    func invalidCPUStillRenders(cpu: Double) {
+    func invalidUsageStillRenders(usage: Double) {
         for m in Mascots.all {
-            #expect(MascotRenderer.render(m, phase: 0, cpu: cpu) != nil)
+            #expect(MascotRenderer.render(m, phase: 0, usage: usage) != nil)
         }
     }
 }

@@ -13,12 +13,12 @@ public enum Tone: String, CaseIterable, Sendable {
 }
 
 public struct Tier: Sendable {
-    public let minCPU: Double
+    public let minUsage: Double
     public let standard: String
     public let gyeongsang: String
 
-    public init(_ minCPU: Double, _ standard: String, _ gyeongsang: String) {
-        self.minCPU = minCPU
+    public init(_ minUsage: Double, _ standard: String, _ gyeongsang: String) {
+        self.minUsage = minUsage
         self.standard = standard
         self.gyeongsang = gyeongsang
     }
@@ -32,19 +32,19 @@ public struct Tier: Sendable {
 public protocol Mascot: Sendable {
     var id: String { get }
     var name: String { get }
-    /// minCPU 오름차순, 첫 단계는 0.
+    /// minUsage 오름차순, 첫 단계는 0.
     var tiers: [Tier] { get }
-    func draw(in ctx: CGContext, phase: Double, cpu: Double)
+    func draw(in ctx: CGContext, phase: Double, usage: Double)
 }
 
 extension Mascot {
-    public func tierIndex(for cpu: Double) -> Int {
-        let c = CPUUsage.clamp(cpu)
-        return tiers.lastIndex { $0.minCPU <= c } ?? 0
+    public func tierIndex(for usage: Double) -> Int {
+        let c = Usage.clamp(usage)
+        return tiers.lastIndex { $0.minUsage <= c } ?? 0
     }
 
-    public func phrase(cpu: Double, tone: Tone) -> String {
-        tiers[tierIndex(for: cpu)].text(tone)
+    public func phrase(usage: Double, tone: Tone) -> String {
+        tiers[tierIndex(for: usage)].text(tone)
     }
 }
 

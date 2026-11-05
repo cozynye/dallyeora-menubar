@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# .app 번들을 만들어 dist/에 zip으로 묶는다. 사용: scripts/make-app.sh [버전]
+# .app 번들을 만들어 dist/에 zip으로 묶는다. 사용: scripts/make-app.sh <버전>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="${1:-0.1.0}"
+VERSION="${1:?버전을 지정하세요. 예: scripts/make-app.sh 0.3.0}"
 APP="dist/Dallyeora.app"
 
 swift build -c release --arch arm64 --arch x86_64

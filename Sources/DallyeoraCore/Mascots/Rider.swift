@@ -11,10 +11,10 @@ struct Rider: Mascot {
         Tier(75, "곧 도착합니다!", "다 왔다, 문 열어라"),
     ]
 
-    func draw(in ctx: CGContext, phase p: Double, cpu: Double) {
-        let moving = cpu >= 25
-        let bump = moving ? abs(sin(p * 1.3)) * (cpu / 100) * 1.1 : 0
-        if cpu >= 75 {
+    func draw(in ctx: CGContext, phase p: Double, usage: Double) {
+        let moving = usage >= 25
+        let bump = moving ? abs(sin(p * 1.3)) * (usage / 100) * 1.1 : 0
+        if usage >= 75 {
             for i in 0..<3 {
                 let fi = Double(i)
                 ctx.line(0.5, 9 + fi * 2.6, 3 + (p + fi).truncatingRemainder(dividingBy: 2), 9 + fi * 2.6)

@@ -5,7 +5,7 @@ public enum MascotRenderer {
     public static let size = CGSize(width: 28, height: 18)
 
     /// 검은 단색으로 그린 이미지. 앱에서 template 이미지로 쓴다.
-    public static func render(_ mascot: any Mascot, phase: Double, cpu: Double, scale: CGFloat = 2) -> CGImage? {
+    public static func render(_ mascot: any Mascot, phase: Double, usage: Double, scale: CGFloat = 2) -> CGImage? {
         let w = Int(size.width * scale), h = Int(size.height * scale)
         guard let ctx = CGContext(
             data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -19,7 +19,7 @@ public enum MascotRenderer {
         ctx.setLineWidth(1.3)
         ctx.setLineCap(.round)
         ctx.setLineJoin(.round)
-        mascot.draw(in: ctx, phase: phase, cpu: CPUUsage.clamp(cpu))
+        mascot.draw(in: ctx, phase: phase, usage: Usage.clamp(usage))
         return ctx.makeImage()
     }
 }
