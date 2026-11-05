@@ -20,7 +20,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     init(settings: Settings) {
         self.settings = settings
         super.init()
+        statusItem.button?.imagePosition = .imageLeading
+        statusItem.button?.cell?.lineBreakMode = .byTruncatingTail
         buildMenu()
+        updateLength()
         sampleCPU()
         startCPUTimer()
         render()
@@ -69,12 +72,20 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             image.isTemplate = true
             button.image = image
         }
-        button.imagePosition = .imageLeading
         let text = m.phrase(cpu: cpu, tone: settings.tone)
         let title = " " + text
         if button.title != title { button.title = title }
         headerItem.title = "\(m.name)    CPU \(Int(cpu.rounded()))%"
         phraseItem.title = text
+    }
+
+    /// 현재 캐릭터·말투의 문구 중 가장 긴 것에 폭을 고정한다.
+    private func updateLength() {
+        let font = statusItem.button?.font ?? NSFont.menuBarFont(ofSize: 0)
+        let widths = mascot.tiers.map {
+            NSAttributedString(string: " " + $0.text(settings.tone), attributes: [.font: font]).size().width
+        }
+        statusItem.length = StatusLayout.length(iconWidth: MascotRenderer.size.width, phraseWidths: widths)
     }
 
     // MARK: 메뉴
@@ -136,6 +147,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         guard let id = sender.representedObject as? String else { return }
         settings.mascotID = id
         updateChecks()
+        updateLength()
         render()
     }
 
@@ -143,6 +155,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         guard let raw = sender.representedObject as? String, let tone = Tone(rawValue: raw) else { return }
         settings.tone = tone
         updateChecks()
+        updateLength()
         render()
     }
 }
