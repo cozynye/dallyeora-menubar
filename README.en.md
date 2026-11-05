@@ -21,7 +21,9 @@ The drawings change with the stages too. The sunfish starts trembling and sweati
 
 You can switch the phrasing between standard Korean and the Gyeongsang dialect from southeastern Korea, which reads a lot gruffer. Your choice of character and dialect is kept after you quit and reopen the app.
 
-Clicking the menu bar icon shows the current character and CPU usage at the top, with submenus below for changing the character and the dialect, and a Quit item.
+The Metric menu lets the character react to memory usage instead of CPU. Memory usage is app memory plus wired and compressed memory, divided by total memory. Since macOS puts spare memory to work as cache, this number often sits above 70 to 80% even on a quiet machine, so in memory mode the character spends more time in the higher stages.
+
+Clicking the menu bar icon shows the current character and the selected metric's usage at the top, with submenus below for changing the character, the dialect and the metric, and a Quit item.
 
 ## Install
 
@@ -33,7 +35,7 @@ The app has no Dock icon and only lives in the menu bar, so to quit it, click th
 
 ## How it works
 
-Every two seconds the app reads CPU tick counts from the macOS kernel and works out usage from the difference since the previous reading. The icon is redrawn every 0.2 seconds at 0% and every 0.03 seconds at 100%, with the interval shrinking in proportion to usage in between. It's drawn as a single-color template image, so macOS picks the right color for light and dark mode.
+Every two seconds the app reads both CPU tick counts and memory page statistics from the macOS kernel. CPU usage comes from the difference since the previous reading, and since both values are always being measured, switching the metric takes effect immediately. The icon is redrawn every 0.2 seconds at 0% and every 0.03 seconds at 100%, with the interval shrinking in proportion to usage in between. It's drawn as a single-color template image, so macOS picks the right color for light and dark mode.
 
 There are no image files; every character is drawn from lines and shapes with Core Graphics. The menu bar item's width is fixed to the longest phrase of the selected character so neighboring icons don't shift around when the stage changes, and the phrase is capped at 150pt and truncated with an ellipsis so the app doesn't get pushed out of sight on a crowded notched MacBook menu bar.
 
