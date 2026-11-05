@@ -9,13 +9,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let phraseItem = NSMenuItem()
     private let mascotMenu = NSMenu()
     private let toneMenu = NSMenu()
+    private let metricMenu = NSMenu()
     private var cpu: Double = 0
+    private var memory: Double = 0
     private var phase: Double = 0
     private var lastTicks: CPUTicks?
     private var cpuTimer: Timer?
     private var frameTimer: Timer?
 
     private var mascot: any Mascot { Mascots.find(settings.mascotID) ?? Mascots.default }
+    /// 캐릭터가 반응하는 값. 설정에서 고른 지표를 따른다.
+    private var usage: Double { settings.metric == .cpu ? cpu : memory }
 
     init(settings: Settings) {
         self.settings = settings
@@ -24,24 +28,24 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.cell?.lineBreakMode = .byTruncatingTail
         buildMenu()
         updateLength()
-        sampleCPU()
-        startCPUTimer()
+        sample()
+        startSampleTimer()
         render()
         scheduleNextFrame()
     }
 
     // MARK: 타이머 — 메뉴가 열려 있어도 돌도록 .common 모드에 등록
 
-    private func startCPUTimer() {
+    private func startSampleTimer() {
         let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sampleCPU() }
+            MainActor.assumeIsolated { self?.sample() }
         }
         RunLoop.main.add(timer, forMode: .common)
         cpuTimer = timer
     }
 
     private func scheduleNextFrame() {
-        let timer = Timer(timeInterval: AnimationClock.frameInterval(cpu: cpu), repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: AnimationClock.frameInterval(cpu: usage), repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -54,12 +58,17 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         scheduleNextFrame()
     }
 
-    private func sampleCPU() {
-        guard let now = CPUTicks.current() else { return }
-        if let last = lastTicks {
-            cpu = CPUUsage.percent(from: last, to: now)
+    /// 지표를 바로 바꿔도 값이 있도록 CPU와 메모리를 함께 잰다.
+    private func sample() {
+        if let now = CPUTicks.current() {
+            if let last = lastTicks {
+                cpu = CPUUsage.percent(from: last, to: now)
+            }
+            lastTicks = now
         }
-        lastTicks = now
+        if let pages = MemoryPages.current() {
+            memory = MemoryUsage.percent(pages)
+        }
     }
 
     // MARK: 그리기
@@ -67,15 +76,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func render() {
         guard let button = statusItem.button else { return }
         let m = mascot
-        if let cg = MascotRenderer.render(m, phase: phase, cpu: cpu) {
+        let value = usage
+        if let cg = MascotRenderer.render(m, phase: phase, cpu: value) {
             let image = NSImage(cgImage: cg, size: MascotRenderer.size)
             image.isTemplate = true
             button.image = image
         }
-        let text = m.phrase(cpu: cpu, tone: settings.tone)
+        let text = m.phrase(cpu: value, tone: settings.tone)
         let title = " " + text
         if button.title != title { button.title = title }
-        headerItem.title = "\(m.name)    CPU \(Int(cpu.rounded()))%"
+        headerItem.title = "\(m.name)    \(settings.metric.label) \(Int(value.rounded()))%"
         phraseItem.title = text
     }
 
@@ -120,6 +130,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         toneItem.submenu = toneMenu
         menu.addItem(toneItem)
 
+        for metric in Metric.allCases {
+            let item = NSMenuItem(title: metric.label, action: #selector(selectMetric(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = metric.rawValue
+            metricMenu.addItem(item)
+        }
+        let metricItem = NSMenuItem(title: "지표", action: nil, keyEquivalent: "")
+        metricItem.submenu = metricMenu
+        menu.addItem(metricItem)
+
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
@@ -141,6 +161,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         for item in toneMenu.items {
             item.state = (item.representedObject as? String) == settings.tone.rawValue ? .on : .off
         }
+        for item in metricMenu.items {
+            item.state = (item.representedObject as? String) == settings.metric.rawValue ? .on : .off
+        }
     }
 
     @objc private func selectMascot(_ sender: NSMenuItem) {
@@ -156,6 +179,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         settings.tone = tone
         updateChecks()
         updateLength()
+        render()
+    }
+
+    @objc private func selectMetric(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let metric = Metric(rawValue: raw) else { return }
+        settings.metric = metric
+        updateChecks()
         render()
     }
 }
