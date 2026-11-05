@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .app 번들을 만들어 dist/에 zip으로 묶는다. 사용: scripts/make-app.sh <버전>
+# .app 번들을 만들어 dist/에 dmg로 묶는다. 사용: scripts/make-app.sh <버전>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -32,5 +32,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP"
-(cd dist && ditto -c -k --keepParent Dallyeora.app "Dallyeora-${VERSION}.zip")
-echo "dist/Dallyeora-${VERSION}.zip"
+
+# 열면 앱과 응용 프로그램 폴더 바로가기가 나란히 보여 끌어다 놓기만 하면 설치된다.
+STAGE="dist/dmg"
+mkdir -p "$STAGE"
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+DMG="dist/Dallyeora-${VERSION}.dmg"
+hdiutil create -volname "달려라 메뉴바" -srcfolder "$STAGE" -format UDZO -ov "$DMG" > /dev/null
+rm -rf "$STAGE"
+echo "$DMG"

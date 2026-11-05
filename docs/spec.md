@@ -97,8 +97,8 @@ Swift Package (Swift 6, macOS 14+), AppKit `NSStatusItem` 기반. Dock 아이콘
 - 그림은 실제 실행해서 메뉴 막대에서 눈으로 확인한다.
 
 ## 6. 빌드·배포
-- `scripts/make-app.sh`: `swift build -c release` → `.app` 번들 구성(Info.plist 포함) → ad-hoc 서명 → zip
-- GitHub Releases에 zip을 올린다.
+- `scripts/make-app.sh`: `swift build -c release` → `.app` 번들 구성(Info.plist 포함) → ad-hoc 서명 → dmg (앱 + Applications 바로가기)
+- GitHub Releases에 dmg를 올린다.
 - 공증하지 않으므로 README에 "처음 실행 시 우클릭 → 열기" 안내를 적는다.
 
 ## 7. 저작권
