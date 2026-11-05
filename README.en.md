@@ -2,7 +2,7 @@
 
 # Dallyeora Menubar
 
-This app puts a little sunfish in your Mac's menu bar. It drifts along calmly when the machine is idle, swims faster as CPU usage climbs, and flips belly-up and dies once usage passes 90%. I got the idea from [RunCat](https://github.com/runcat-dev/RunCatNeo), where a cat runs at the speed of your CPU, and wanted the same thing built around Korean internet memes, so I added three more characters you can pick from the menu.
+A macOS menu bar app that shows CPU and memory usage as an animated character. The default character, a sunfish, drifts along calmly when the machine is idle, swims faster as usage climbs, and flips belly-up and dies once usage passes 90%. Four Korean meme characters are included (a sunfish, an office worker heading home, a pork belly grill and a delivery rider), and you can switch between them from the menu.
 
 The sunfish is a running joke in Korea: it's said to be so fragile that it dies from being startled, from too much sunlight, or from stress, which makes it a good stand-in for a laptop under load.
 
@@ -27,9 +27,9 @@ Clicking the menu bar icon shows the current character and the selected metric's
 
 ## Install
 
-Download `Dallyeora-<version>.zip` from [Releases](../../releases), unzip it, and move `Dallyeora.app` to your Applications folder. It needs macOS 14 or later and runs on both Apple Silicon and Intel Macs.
+Download `Dallyeora-<version>.dmg` from [Releases](../../releases), open it, and drag `Dallyeora.app` onto the Applications folder next to it. It needs macOS 14 or later and runs on both Apple Silicon and Intel Macs.
 
-Because this is a personal project and the app isn't notarized by Apple, macOS will block it the first time. Right-click the app and choose Open. On macOS 15 and later, if that still doesn't work, go to System Settings > Privacy & Security and click "Open Anyway" near the bottom. After the first launch it opens normally.
+Because the app isn't notarized by Apple, macOS will block it the first time. Right-click the app and choose Open. On macOS 15 and later, if that still doesn't work, go to System Settings > Privacy & Security and click "Open Anyway" near the bottom. After the first launch it opens normally.
 
 The app has no Dock icon and only lives in the menu bar, so to quit it, click the menu bar icon and choose Quit, or press ⌘Q while the menu is open.
 
@@ -46,7 +46,7 @@ You need the Swift 6 toolchain, and building the universal (Intel plus Apple Sil
 ```bash
 swift test                  # unit tests
 swift run Dallyeora         # build and run
-scripts/make-app.sh 0.1.0   # creates Dallyeora.app and a zip in dist/
+scripts/make-app.sh 0.3.0   # creates Dallyeora.app and a dmg in dist/
 ```
 
 The app launched with `swift run` and the packaged `.app` store their settings separately, so a character picked in one won't show up in the other.
@@ -55,8 +55,8 @@ Logic and drawing that can be tested without AppKit live in `Sources/DallyeoraCo
 
 ## Known limitations
 
-The icon is redrawn every 0.2 seconds even at 0% CPU, so the app uses a bit more power than one that does nothing. RunCat works the same way and the icon is tiny, so I don't think it matters much, but if it shows up noticeably in Activity Monitor's Energy tab I plan to pause drawing while the display is off. There's no launch-at-login option yet; if you want it, add the app under System Settings > General > Login Items.
+The icon is redrawn every 0.2 seconds even at 0% usage, so the app uses a bit more power than one that does nothing. The timers have a tolerance set so the system can coalesce wakeups, but drawing doesn't pause while the display is off yet. There's no launch-at-login option either; if you want it, add the app under System Settings > General > Login Items.
 
 ## License
 
-MIT. All characters are simple shapes I drew myself, and no existing characters or brand logos are used.
+MIT. All characters are drawn from simple shapes in code, and no existing characters or brand logos are used.
