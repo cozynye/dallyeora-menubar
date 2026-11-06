@@ -10,6 +10,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let mascotMenu = NSMenu()
     private let toneMenu = NSMenu()
     private let metricMenu = NSMenu()
+    private let cleanup = CleanupWindowController()
     private var sampler = UsageSampler()
     private var phase: Double = 0
     private var sampleTimer: Timer?
@@ -103,6 +104,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(phraseItem)
         menu.addItem(.separator())
 
+        let cleanupItem = NSMenuItem(title: "정리하기…", action: #selector(openCleanup), keyEquivalent: "")
+        cleanupItem.target = self
+        menu.addItem(cleanupItem)
+        menu.addItem(.separator())
+
         for m in Mascots.all {
             let item = NSMenuItem(title: m.name, action: #selector(selectMascot(_:)), keyEquivalent: "")
             item.target = self
@@ -180,5 +186,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         settings.metric = metric
         updateChecks()
         render()
+    }
+
+    @objc private func openCleanup() {
+        cleanup.show(metric: settings.metric)
     }
 }
