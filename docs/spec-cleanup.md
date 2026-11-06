@@ -69,7 +69,7 @@ CPU나 메모리 사용률이 높을 때 어떤 앱이 얼마나 쓰는지 **한
 입력은 프로세스 표본(pid, ppid, uid, 이름, 경로, footprint 바이트, CPU 누적 시간 ns)의 목록이다. 순서대로 적용한다.
 
 1. 내 pid는 버린다.
-2. uid가 내 uid와 다르면 **시스템** 묶음으로 보낸다. 수치는 없고 개수와 이름 몇 개만 남긴다.
+2. uid가 내 uid와 다르면 **시스템** 묶음으로 보낸다. 수치는 없고 개수만 남긴다(설명 문구가 고정이라 이름은 쓰지 않는다).
 3. 경로에서 **가장 바깥의 `.app`** 까지를 앱 번들 경로로 본다. 예: `/Applications/Google Chrome.app/Contents/Frameworks/…/Google Chrome Helper (Renderer).app/Contents/MacOS/…` → `/Applications/Google Chrome.app`. 있으면 그 번들로 묶는다.
 4. 경로에 `.app`이 없으면 ppid를 따라 올라가며(최대 10단계, pid 1에서 멈춤) 3번 규칙에 맞는 조상을 찾는다. 찾으면 그 번들로 묶는다. 예: Cursor가 띄운 `/opt/homebrew/bin/node` → Cursor, 터미널에서 띄운 `python` → 터미널.
 5. 그래도 없으면 **이름**으로 묶는다. 예: `mds_stores` 3개 → 한 줄, `com.apple.WebKit.WebContent` 여러 개 → 한 줄.
@@ -108,7 +108,9 @@ CPU나 메모리 사용률이 높을 때 어떤 앱이 얼마나 쓰는지 **한
 - 대표 pid로 `NSRunningApplication`을 얻을 수 있다.
 - `activationPolicy`가 `.regular` 또는 `.accessory`다 (Dock이나 메뉴 막대에 보이는 앱). `.prohibited`(백그라운드 전용)는 `내 백그라운드`로 표시만 한다.
 
-종료는 `terminate()`(⌘Q와 같아서 저장하지 않은 문서가 있으면 그 앱이 묻는다), 강제 종료는 `forceTerminate()`다. `terminate()`가 macOS 권한 요청 창을 띄우지 않는지는 미검증이라 구현 첫 단계에서 실제로 눌러 확인한다.
+Finder, Dock, Spotlight, 제어 센터처럼 `.app` 번들로 돌아가는 **macOS 구성 요소는 사전에 보호 표시**를 두어 `activationPolicy`와 무관하게 `시스템` 배지로 보여 주고 버튼을 붙이지 않는다(Finder는 꺼도 바로 다시 켜지지만 사용자가 당황한다).
+
+종료는 `terminate()`(⌘Q와 같아서 저장하지 않은 문서가 있으면 그 앱이 묻는다), 강제 종료는 `forceTerminate()`다. 강제 종료는 저장하지 않은 작업을 잃을 수 있으므로 누르면 `NSAlert`로 한 번 확인한다: 제목 `"<앱 이름>"을(를) 강제 종료할까요?`, 본문 `저장하지 않은 작업은 사라집니다.`, 버튼 `강제 종료` / `취소`. `terminate()`가 macOS 권한 요청 창을 띄우지 않는지는 미검증이라 구현 첫 단계에서 실제로 눌러 확인한다.
 
 ## 4. 구조
 
@@ -120,10 +122,11 @@ CPU나 메모리 사용률이 높을 때 어떤 앱이 얼마나 쓰는지 **한
 | `ProcessSample` | pid, ppid, uid, name, path, footprintBytes, cpuTimeNanos | 없음 |
 | `ProcessSnapshot` | `uptime: TimeInterval`과 `samples: [ProcessSample]` | `ProcessSample` |
 | `ProcessReader` | `proc_listallpids` → pid마다 `sysctl KERN_PROC_PID`(ppid, uid), `proc_pidpath`, 내 uid면 `proc_pid_rusage`(footprint, CPU 시간을 timebase로 ns 변환). 이름은 경로의 마지막 요소를 쓰고, 경로를 못 읽으면 `p_comm`(16자에서 잘림)을 쓴다 | Darwin |
-| `ProcessGroup` | `id`, `kind`(`.app(bundlePath, mainPID)` / `.background(name)` / `.system(count, sampleNames)`), `pids`, `footprintBytes`, `cpuTimeNanos` | 없음 |
+| `ProcessGroup` | `id`, `kind`(`.app(bundlePath, mainPID)` / `.background(name)` / `.system(count)`), `pids`, `footprintBytes`, `cpuTimeNanos` | 없음 |
+| `AppBundleInfo` | 번들 경로에서 `Bundle(path:)`로 번들 ID, `FileManager.displayName(atPath:)`로 현지화 이름을 읽는다 | Foundation |
 | `ProcessGrouper` | 3.4의 묶기 규칙. `appBundlePath(of:)`, `group(_:currentUID:selfPID:)` | `ProcessGroup` |
 | `UsageRanker` | 3.5의 계산. 직전 pid별 CPU 시간, 경과 시간, 코어 수, 전체 CPU%, 전체 메모리 바이트를 받아 정렬된 `RankedRow` 목록을 만든다. `RankedRow`는 `group`(그 외 줄은 nil), `kind`(`.app` / `.background` / `.system` / `.others`), `memoryBytes`, `cpuPercent: Double?`를 가진다 | `ProcessGroup`, `Metric` |
-| `ProcessCatalog` | 3.6의 사전과 폴백. `describe(group, bundleID:, localizedName:) -> ProcessDescription(title, summary, source)` | `ProcessGroup` |
+| `ProcessCatalog` | 3.6의 사전과 폴백. `describe(group, bundleID:, localizedName:) -> ProcessDescription(title, summary, source, isProtected)` | `ProcessGroup` |
 | `UsageFormat` | 바이트와 퍼센트 문자열 | 없음 |
 | `MemoryUsage.usedBytes(_:pageSize:)` | 기존 페이지 수를 바이트로 | 기존 `MemoryPages` |
 
