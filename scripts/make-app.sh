@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# .app 번들을 만들어 dist/에 dmg로 묶는다. 사용: scripts/make-app.sh <버전>
+# .app 번들을 만들어 dist/에 dmg와 zip으로 묶는다. 사용: scripts/make-app.sh <버전>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -41,4 +41,7 @@ ln -s /Applications "$STAGE/Applications"
 DMG="dist/Dallyeora-${VERSION}.dmg"
 hdiutil create -volname "달려라 메뉴바" -srcfolder "$STAGE" -format UDZO -ov "$DMG" > /dev/null
 rm -rf "$STAGE"
+ZIP="dist/Dallyeora-${VERSION}.zip"
+(cd dist && ditto -c -k --keepParent Dallyeora.app "Dallyeora-${VERSION}.zip")
 echo "$DMG"
+echo "$ZIP"
