@@ -18,7 +18,7 @@
 - 사용률 값은 항상 `Usage.clamp`를 거쳐 0–100.
 - 사용자에게 보이는 문구는 모두 한국어, 평서체. 스펙 3.3·3.6·3.7의 문구를 글자 그대로 쓴다.
 - 커밋 메시지에 `Co-Authored-By` 등 클로드 표시를 넣지 않는다. 각 태스크 끝에 로컬 커밋만 한다(push 금지).
-- README는 고치되 커밋하지 않고 사용자에게 보여 준다(Task 8).
+- README는 고치되 커밋하지 않고 사용자에게 보여 준다(Task 9).
 - 테스트 뒤 `defaults delete com.cozynye.dallyeora.tests`로 정리한다(기존 SettingsTests 때문).
 
 ## Review Focus
@@ -1748,7 +1748,100 @@ git commit -m "feat: add cleanup window that lists and quits heavy apps"
 
 ---
 
-### Task 8: 문서, 빌드, README 초안
+### Task 8: 한 줄 설치 스크립트
+
+**Files:**
+- Create: `scripts/install.sh`
+- Modify: `scripts/make-app.sh`
+
+**Interfaces:**
+- Produces: `dist/Dallyeora-<버전>.zip`(dmg 옆에 함께), `scripts/install.sh`(환경 변수 `DALLYEORA_ZIP`이 있으면 그 파일을, 없으면 최신 Release의 zip을 설치)
+
+curl로 받은 파일에는 macOS 격리 표시가 붙지 않아 "확인할 수 없습니다" 경고 없이 열린다. 스크립트는 그 점을 이용한다.
+
+- [ ] **Step 1: make-app.sh가 zip도 만들게**
+
+`scripts/make-app.sh`의 마지막 두 줄(`rm -rf "$STAGE"`, `echo "$DMG"`) 사이에 추가하고, 마지막 echo를 바꾼다:
+```bash
+ZIP="dist/Dallyeora-${VERSION}.zip"
+(cd dist && ditto -c -k --keepParent Dallyeora.app "Dallyeora-${VERSION}.zip")
+echo "$DMG"
+echo "$ZIP"
+```
+(기존 `echo "$DMG"`는 지운다.) 첫 줄 주석도 `# .app 번들을 만들어 dist/에 dmg와 zip으로 묶는다.`로 바꾼다.
+
+- [ ] **Step 2: install.sh**
+
+`scripts/install.sh`:
+```sh
+#!/bin/sh
+# 달려라 메뉴바 한 줄 설치.
+# 최신 Release의 zip을 받아 응용 프로그램 폴더에 넣고 실행한다.
+# curl로 받은 파일에는 macOS 격리 표시가 붙지 않아 "확인할 수 없습니다" 경고 없이 열린다.
+# 테스트용: DALLYEORA_ZIP=경로 를 주면 내려받지 않고 그 zip을 설치한다.
+set -eu
+
+REPO="cozynye/dallyeora-menubar"
+APP_NAME="Dallyeora.app"
+DEST="/Applications"
+if [ ! -w "$DEST" ]; then
+  DEST="$HOME/Applications"
+  mkdir -p "$DEST"
+fi
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+
+if [ -n "${DALLYEORA_ZIP:-}" ]; then
+  cp "$DALLYEORA_ZIP" "$TMP/app.zip"
+else
+  echo "최신 버전을 확인합니다..."
+  URL=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+    | grep '"browser_download_url"' | grep '\.zip"' | head -1 | sed 's/.*"\(https[^"]*\)".*/\1/')
+  if [ -z "$URL" ]; then
+    echo "다운로드 주소를 찾지 못했습니다. https://github.com/$REPO/releases 에서 직접 받아 주세요." >&2
+    exit 1
+  fi
+  echo "내려받는 중: $URL"
+  curl -fsSL "$URL" -o "$TMP/app.zip"
+fi
+
+ditto -x -k "$TMP/app.zip" "$TMP"
+if [ ! -d "$TMP/$APP_NAME" ]; then
+  echo "zip 안에 $APP_NAME 이 없습니다." >&2
+  exit 1
+fi
+
+if pgrep -x Dallyeora >/dev/null 2>&1; then
+  echo "실행 중인 앱을 끕니다."
+  pkill -x Dallyeora || true
+  sleep 1
+fi
+
+rm -rf "$DEST/$APP_NAME"
+ditto "$TMP/$APP_NAME" "$DEST/$APP_NAME"
+xattr -dr com.apple.quarantine "$DEST/$APP_NAME" 2>/dev/null || true
+open "$DEST/$APP_NAME"
+echo "설치했습니다: $DEST/$APP_NAME"
+echo "메뉴 막대 오른쪽 위에 개복치가 보이면 끝입니다."
+```
+`chmod +x scripts/install.sh`.
+
+- [ ] **Step 3: 확인**
+
+Run: `sh -n scripts/install.sh && echo syntax-ok; pkill -x Dallyeora; scripts/make-app.sh 0.4.0 2>&1 | tail -2; ls -la /Applications/Dallyeora.app 2>/dev/null | head -1; DALLYEORA_ZIP=dist/Dallyeora-0.4.0.zip sh scripts/install.sh; sleep 2; pgrep -x Dallyeora; xattr -l /Applications/Dallyeora.app | grep -c quarantine; defaults read /Applications/Dallyeora.app/Contents/Info.plist CFBundleShortVersionString`
+Expected: `syntax-ok`, dmg와 zip 두 줄, "설치했습니다" 메시지, 실행 중 pid 하나, quarantine 개수 `0`, 버전 `0.4.0`. `/Applications`에 이미 있던 이전 버전은 덮어쓴다(사용자 자신의 앱).
+
+- [ ] **Step 4: 커밋**
+
+```bash
+git add scripts/install.sh scripts/make-app.sh
+git commit -m "build: add one-line install script and ship a zip next to the dmg"
+```
+
+---
+
+### Task 9: 문서, 빌드, README 초안
 
 **Files:**
 - Modify: `CLAUDE.md`
@@ -1788,6 +1881,18 @@ Choosing "정리하기…" (Clean up) from the menu opens a window that lists wh
 
 System processes cannot be measured without administrator rights, so they appear as a single "macOS 시스템" row, and the memory total does not match the menu bar percentage exactly because the two use different definitions. Processes not in the built-in catalog show their raw name or "unknown"; the catalog lives in `Sources/DallyeoraCore/Processes/CatalogEntries.swift`.
 ```
+"## 설치" 절 맨 앞(첫 문단 앞)에 한 줄 설치를 넣는다:
+```
+터미널에서 아래 한 줄을 실행하면 최신 버전을 받아 응용 프로그램 폴더에 넣고 바로 실행한다. 이 방법은 아래에 설명하는 보안 경고가 뜨지 않는다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cozynye/dallyeora-menubar/main/scripts/install.sh | sh
+```
+
+터미널이 불편하면 [Releases](../../releases)에서 … (기존 첫 문단을 "터미널이 불편하면"으로 이어서 쓴다)
+```
+영어도 같은 자리에: `Run this one line in Terminal to download the latest version into your Applications folder and launch it. Installing this way does not trigger the security warning described below.` 뒤에 같은 명령, 그리고 `If you would rather not use Terminal, download …`로 기존 문단을 잇는다.
+
 "## 설치"의 두 번째 문단도 고친다. macOS 15부터는 우클릭 → 열기가 공증 없는 앱에 통하지 않는다(사용자가 v0.3.0 dmg로 실제 겪음):
 ```
 Apple 공증을 받지 않은 앱이라 처음 열 때 "악성 코드가 없음을 확인할 수 없습니다"라는 창이 뜨고 열리지 않는다. 그 창을 닫은 뒤 시스템 설정 → 개인정보 보호 및 보안으로 가서 아래쪽에 뜨는 "그래도 열기"를 누르고, 다시 앱을 열어 확인하면 된다. 이 버튼은 막힌 뒤 한 시간 동안만 보인다. 터미널이 편하면 `xattr -d com.apple.quarantine /Applications/Dallyeora.app`으로 격리 표시를 지워도 된다. 한 번 열고 나면 다음부터는 그냥 실행된다.
@@ -1800,9 +1905,9 @@ Because the app isn't notarized by Apple, the first launch is blocked with a mes
 
 - [ ] **Step 4: 빌드해서 띄우기**
 
-Run: `pkill -x Dallyeora; scripts/make-app.sh 0.4.0 2>&1 | tail -1; open dist/Dallyeora.app`
-Expected: `dist/Dallyeora-0.4.0.dmg`. 앱이 메뉴 막대에 뜬다.
+Run: `pgrep -x Dallyeora || open /Applications/Dallyeora.app; ls dist`
+Expected: Task 8에서 설치한 0.4.0이 실행 중이고 `dist/`에 `Dallyeora-0.4.0.dmg`와 `Dallyeora-0.4.0.zip`이 있다.
 
 - [ ] **Step 5: 보고**
 
-사용자에게 `git diff README.md README.en.md`를 보여 주고 커밋·push·Release 허락을 받는다. Task 7 Step 5의 확인 항목 10개와, 권한 요청 창 유무(미검증)를 함께 적는다.
+사용자에게 `git diff README.md README.en.md`를 보여 주고 커밋·push·Release(dmg와 zip 둘 다 첨부) 허락을 받는다. Task 7 Step 5의 확인 항목 10개와, 권한 요청 창 유무(미검증)를 함께 적는다.
