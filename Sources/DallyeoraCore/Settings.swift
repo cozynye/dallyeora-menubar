@@ -7,6 +7,7 @@ public final class Settings {
         public static let mascot = "mascotID"
         public static let tone = "tone"
         public static let metric = "metric"
+        public static let showsPhrase = "showsPhrase"
     }
 
     private let defaults: UserDefaults
@@ -28,5 +29,11 @@ public final class Settings {
     public var metric: Metric {
         get { defaults.string(forKey: Key.metric).flatMap(Metric.init(rawValue:)) ?? .cpu }
         set { defaults.set(newValue.rawValue, forKey: Key.metric) }
+    }
+
+    /// 메뉴 막대에 아이콘 옆 대사를 붙일지. 자리를 많이 차지해 기본은 끔.
+    public var showsPhrase: Bool {
+        get { defaults.bool(forKey: Key.showsPhrase) }
+        set { defaults.set(newValue, forKey: Key.showsPhrase) }
     }
 }

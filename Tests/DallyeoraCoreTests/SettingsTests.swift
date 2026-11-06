@@ -18,6 +18,7 @@ struct SettingsTests {
         #expect(s.mascotID == "sunfish")
         #expect(s.tone == .standard)
         #expect(s.metric == .cpu)
+        #expect(s.showsPhrase == false, "메뉴 막대 자리를 아끼기 위해 대사는 기본으로 숨긴다")
     }
 
     @Test func persistsChoicesAcrossInstances() {
@@ -25,10 +26,12 @@ struct SettingsTests {
         s.mascotID = "pork"
         s.tone = .gyeongsang
         s.metric = .memory
+        s.showsPhrase = true
         let reloaded = Settings(defaults: defaults)
         #expect(reloaded.mascotID == "pork")
         #expect(reloaded.tone == .gyeongsang)
         #expect(reloaded.metric == .memory)
+        #expect(reloaded.showsPhrase == true)
     }
 
     @Test func unknownStoredValuesFallBack() {

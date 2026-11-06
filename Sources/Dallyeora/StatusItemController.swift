@@ -10,6 +10,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let mascotMenu = NSMenu()
     private let toneMenu = NSMenu()
     private let metricMenu = NSMenu()
+    private let phraseToggleItem = NSMenuItem()
     private let cleanup = CleanupWindowController()
     private var sampler = UsageSampler()
     private var phase: Double = 0
@@ -77,18 +78,18 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             button.image = image
         }
         let text = m.phrase(usage: value, tone: settings.tone)
-        let title = " " + text
+        let title = settings.showsPhrase ? " " + text : ""
         if button.title != title { button.title = title }
         headerItem.title = "\(m.name)    \(settings.metric.label) \(Int(value.rounded()))%"
         phraseItem.title = text
     }
 
-    /// 현재 캐릭터·말투의 문구 중 가장 긴 것에 폭을 고정한다.
+    /// 현재 캐릭터·말투의 문구 중 가장 긴 것에 폭을 고정한다. 대사를 숨기면 아이콘 폭만 쓴다.
     private func updateLength() {
         let font = statusItem.button?.font ?? NSFont.menuBarFont(ofSize: 0)
-        let widths = mascot.tiers.map {
+        let widths = settings.showsPhrase ? mascot.tiers.map {
             NSAttributedString(string: " " + $0.text(settings.tone), attributes: [.font: font]).size().width
-        }
+        } : []
         statusItem.length = StatusLayout.length(iconWidth: MascotRenderer.size.width, phraseWidths: widths)
     }
 
@@ -139,6 +140,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         metricItem.submenu = metricMenu
         menu.addItem(metricItem)
 
+        phraseToggleItem.title = "메뉴 막대에 대사 표시"
+        phraseToggleItem.action = #selector(togglePhrase)
+        phraseToggleItem.target = self
+        menu.addItem(phraseToggleItem)
+
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
@@ -163,6 +169,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         for item in metricMenu.items {
             item.state = (item.representedObject as? String) == settings.metric.rawValue ? .on : .off
         }
+        phraseToggleItem.state = settings.showsPhrase ? .on : .off
+    }
+
+    @objc private func togglePhrase() {
+        settings.showsPhrase.toggle()
+        updateChecks()
+        updateLength()
+        render()
     }
 
     @objc private func selectMascot(_ sender: NSMenuItem) {
