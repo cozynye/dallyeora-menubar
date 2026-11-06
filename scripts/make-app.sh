@@ -10,8 +10,10 @@ swift build -c release --arch arm64 --arch x86_64
 BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)"
 
 rm -rf dist
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Dallyeora" "$APP/Contents/MacOS/Dallyeora"
+# 아이콘은 이미지 파일 없이 코드로 그려서 만든다.
+"$BIN/IconTool" "$APP/Contents/Resources/AppIcon.icns" > /dev/null
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -22,6 +24,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key><string>Dallyeora</string>
     <key>CFBundleDisplayName</key><string>달려라 메뉴바</string>
     <key>CFBundleExecutable</key><string>Dallyeora</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>${VERSION}</string>
     <key>CFBundleVersion</key><string>${VERSION}</string>
