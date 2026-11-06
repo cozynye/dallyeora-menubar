@@ -25,11 +25,23 @@ The Metric menu lets the character react to memory usage instead of CPU. Memory 
 
 Clicking the menu bar icon shows the current character and the selected metric's usage at the top, with submenus below for changing the character, the dialect and the metric, and a Quit item.
 
+## Cleanup window
+
+Choosing "정리하기…" (Clean up) from the menu opens a window that lists what is using the most CPU or memory right now. Apps with dozens of helper processes, like Chrome, are collapsed into one row, and each row carries a Korean name and a one-line note on why it is busy and whether it will settle down on its own. Apps that appear in the Dock or menu bar get a Quit button that works like ⌘Q; if the app is still running after five seconds the button changes to Force Quit, which asks for confirmation first.
+
+System processes cannot be measured without administrator rights, so they appear as a single "macOS 시스템" row, and the memory total does not match the menu bar percentage exactly because the two use different definitions. Processes not in the built-in catalog show their raw name or "unknown"; the catalog lives in `Sources/DallyeoraCore/Processes/CatalogEntries.swift`.
+
 ## Install
 
-Download `Dallyeora-<version>.dmg` from [Releases](../../releases), open it, and drag `Dallyeora.app` onto the Applications folder next to it. It needs macOS 14 or later and runs on both Apple Silicon and Intel Macs.
+Run this one line in Terminal to download the latest version into your Applications folder and launch it. Installing this way does not trigger the security warning described below.
 
-Because the app isn't notarized by Apple, macOS will block it the first time. Right-click the app and choose Open. On macOS 15 and later, if that still doesn't work, go to System Settings > Privacy & Security and click "Open Anyway" near the bottom. After the first launch it opens normally.
+```bash
+curl -fsSL https://raw.githubusercontent.com/cozynye/dallyeora-menubar/main/scripts/install.sh | sh
+```
+
+If you would rather not use Terminal, download `Dallyeora-<version>.dmg` from [Releases](../../releases), open it, and drag `Dallyeora.app` onto the Applications folder next to it. It needs macOS 14 or later and runs on both Apple Silicon and Intel Macs.
+
+Because the app isn't notarized by Apple, the first launch is blocked with a message saying Apple could not verify it is free of malware. Close that dialog, open System Settings > Privacy & Security, scroll down and click "Open Anyway", then open the app again and confirm. The button is only shown for about an hour after the blocked attempt. If you prefer the terminal, `xattr -d com.apple.quarantine /Applications/Dallyeora.app` removes the quarantine flag instead. After the first launch it opens normally.
 
 The app has no Dock icon and only lives in the menu bar, so to quit it, click the menu bar icon and choose Quit, or press ⌘Q while the menu is open.
 
@@ -46,7 +58,7 @@ You need the Swift 6 toolchain, and building the universal (Intel plus Apple Sil
 ```bash
 swift test                  # unit tests
 swift run Dallyeora         # build and run
-scripts/make-app.sh 0.3.0   # creates Dallyeora.app and a dmg in dist/
+scripts/make-app.sh 0.4.0   # creates Dallyeora.app, a dmg and a zip in dist/
 ```
 
 The app launched with `swift run` and the packaged `.app` store their settings separately, so a character picked in one won't show up in the other.
@@ -55,7 +67,7 @@ Logic and drawing that can be tested without AppKit live in `Sources/DallyeoraCo
 
 ## Known limitations
 
-The icon is redrawn every 0.2 seconds even at 0% usage, so the app uses a bit more power than one that does nothing. The timers have a tolerance set so the system can coalesce wakeups, but drawing doesn't pause while the display is off yet. There's no launch-at-login option either; if you want it, add the app under System Settings > General > Login Items.
+The icon is redrawn every 0.2 seconds even at 0% usage, so the app uses a bit more power than one that does nothing. The timers have a tolerance set so the system can coalesce wakeups, but drawing doesn't pause while the display is off yet. There's no launch-at-login option either; if you want it, add the app under System Settings > General > Login Items. The cleanup window is Korean only and does not list system processes individually.
 
 ## License
 
