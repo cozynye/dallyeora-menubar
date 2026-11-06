@@ -16,6 +16,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private var phase: Double = 0
     private var sampleTimer: Timer?
     private var frameTimer: Timer?
+    private var flash = PhraseFlash()
+    private var flashTimer: Timer?
+    private var isFlashing = false
+    /// 대사를 항상 켰거나, 단계가 바뀌어 잠깐 보여 주는 중.
+    private var phraseVisible: Bool { settings.showsPhrase || isFlashing }
 
     private var mascot: any Mascot { Mascots.find(settings.mascotID) ?? Mascots.default }
     /// 캐릭터가 반응하는 값. 설정에서 고른 지표를 따른다.
@@ -78,19 +83,39 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             button.image = image
         }
         let text = m.phrase(usage: value, tone: settings.tone)
-        let title = settings.showsPhrase ? " " + text : ""
+        if button.toolTip != text { button.toolTip = text }
+        // 숨겨 둔 대사는 단계가 바뀌는 순간에만 잠깐 보여 준다.
+        if flash.shouldFlash(tier: m.tierIndex(for: value)), !settings.showsPhrase { startFlash() }
+        let title = phraseVisible ? " " + text : ""
         if button.title != title { button.title = title }
         headerItem.title = "\(m.name)    \(settings.metric.label) \(Int(value.rounded()))%"
         phraseItem.title = text
     }
 
-    /// 현재 캐릭터·말투의 문구 중 가장 긴 것에 폭을 고정한다. 대사를 숨기면 아이콘 폭만 쓴다.
+    /// 현재 캐릭터·말투의 문구 중 가장 긴 것에 폭을 고정한다. 대사가 안 보일 때는 아이콘 폭만 쓴다.
     private func updateLength() {
         let font = statusItem.button?.font ?? NSFont.menuBarFont(ofSize: 0)
-        let widths = settings.showsPhrase ? mascot.tiers.map {
+        let widths = phraseVisible ? mascot.tiers.map {
             NSAttributedString(string: " " + $0.text(settings.tone), attributes: [.font: font]).size().width
         } : []
         statusItem.length = StatusLayout.length(iconWidth: MascotRenderer.size.width, phraseWidths: widths)
+    }
+
+    /// 대사를 `PhraseFlash.duration` 동안 붙였다가 뗀다. 그 사이 또 바뀌면 시간을 다시 센다.
+    private func startFlash() {
+        isFlashing = true
+        updateLength()
+        flashTimer?.invalidate()
+        let timer = Timer(timeInterval: PhraseFlash.duration, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.isFlashing = false
+                self.updateLength()
+                self.render()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        flashTimer = timer
     }
 
     // MARK: 메뉴
@@ -182,6 +207,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func selectMascot(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         settings.mascotID = id
+        flash.reset() // 캐릭터마다 단계가 달라 바꾼 직후에는 대사를 띄우지 않는다
         updateChecks()
         updateLength()
         render()
