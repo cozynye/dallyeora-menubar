@@ -7,8 +7,16 @@ import Observation
 @Observable
 final class CleanupModel {
     struct Row: Identifiable {
-        enum Badge { case quittable, background, system, others }
+        enum Badge { case quittable, background, system }
         enum QuitState { case idle, requested, force }
+
+        /// 줄을 펼치면 보이는 프로세스 하나.
+        struct Member: Identifiable {
+            let pid: pid_t
+            let name: String
+            let usageText: String
+            var id: pid_t { pid }
+        }
 
         let id: String
         let title: String
@@ -16,9 +24,15 @@ final class CleanupModel {
         let icon: NSImage?
         let usageText: String
         let badge: Badge
+        /// 지금 데스크톱에 보이는 창 개수. 앱이 아니면 0.
+        let windowCount: Int
         let mainPID: pid_t?
         let quitState: QuitState
+        let members: [Member]
     }
+
+    /// 종료를 요청한 뒤 이 시간이 지나도 살아 있으면 강제 종료 버튼으로 바꾼다. VS Code는 다 꺼지는 데 5초쯤 걸린다.
+    static let forceQuitDelay: TimeInterval = 10
 
     var metric: Metric {
         didSet { rebuild() }
@@ -93,21 +107,23 @@ final class CleanupModel {
             groups: groups, current: current, previous: previous,
             cpuCount: ProcessInfo.processInfo.activeProcessorCount,
             totals: .init(cpuPercent: totalCPU, memoryBytes: memoryBytes), metric: metric)
-        rows = ranked.map(makeRow)
+        let windows = terminator.windowCounts()
+        rows = ranked.map { makeRow($0, windows: windows) }
         let liveIDs = Set(rows.map(\.id))
         quitStates = quitStates.filter { liveIDs.contains($0.key) }
         let total = metric == .cpu ? (totalCPU.map(UsageFormat.percent) ?? "측정 중…") : UsageFormat.percent(memoryPercent)
         totalText = "지금 \(metric.label)를 많이 쓰는 것 · 전체 \(total)"
     }
 
-    private func makeRow(_ ranked: RankedRow) -> Row {
-        let usage = metric == .cpu
-            ? (ranked.cpuPercent.map(UsageFormat.percent) ?? "측정 중…")
-            : UsageFormat.bytes(ranked.memoryBytes)
+    private func usageText(cpuPercent: Double?, memoryBytes: UInt64) -> String {
+        metric == .cpu ? (cpuPercent.map(UsageFormat.percent) ?? "측정 중…") : UsageFormat.bytes(memoryBytes)
+    }
 
-        guard let group = ranked.group else {
-            return Row(id: "others", title: "그 외 \(ranked.count)개", summary: "15위 밖의 묶음을 합친 값이다.",
-                       icon: nil, usageText: usage, badge: .others, mainPID: nil, quitState: .idle)
+    private func makeRow(_ ranked: RankedRow, windows: [pid_t: Int]) -> Row {
+        let group = ranked.group
+        let usage = usageText(cpuPercent: ranked.cpuPercent, memoryBytes: ranked.memoryBytes)
+        let members = ranked.members.map {
+            Row.Member(pid: $0.pid, name: $0.name, usageText: usageText(cpuPercent: $0.cpuPercent, memoryBytes: $0.memoryBytes))
         }
 
         if case .app(let bundle, _) = group.kind {
@@ -115,16 +131,18 @@ final class CleanupModel {
                 group, bundleID: AppBundleInfo.bundleID(at: bundle), localizedName: AppBundleInfo.displayName(at: bundle))
             let quitPID = group.quitTarget { terminator.canQuit($0) }
             let badge: Row.Badge = description.isProtected ? .system : (quitPID != nil ? .quittable : .background)
+            let windowCount = group.pids.reduce(0) { $0 + (windows[$1] ?? 0) }
             return Row(id: group.id, title: description.title, summary: description.summary,
                        icon: terminator.icon(forBundleAt: bundle), usageText: usage, badge: badge,
-                       mainPID: quitPID, quitState: quitStates[group.id] ?? .idle)
+                       windowCount: windowCount, mainPID: quitPID, quitState: quitStates[group.id] ?? .idle,
+                       members: members)
         }
 
         let description = ProcessCatalog.describe(group, bundleID: nil, localizedName: nil)
         let badge: Row.Badge = ranked.kind == .system ? .system : .background
         let title = ranked.kind == .background && ranked.count > 1 ? "\(description.title) ×\(ranked.count)" : description.title
         return Row(id: group.id, title: title, summary: description.summary, icon: nil, usageText: usage,
-                   badge: badge, mainPID: nil, quitState: .idle)
+                   badge: badge, windowCount: 0, mainPID: nil, quitState: .idle, members: members)
     }
 
     // MARK: 종료
@@ -133,7 +151,7 @@ final class CleanupModel {
         row.title
     }
 
-    /// 일반 종료. 5초 뒤에도 살아 있으면 강제 종료 버튼으로 바뀐다.
+    /// 일반 종료. `forceQuitDelay` 뒤에도 살아 있으면 강제 종료 버튼으로 바뀐다.
     func quit(_ row: Row) {
         guard let pid = row.mainPID else { return }
         let id = row.id // Timer 블록은 @Sendable이라 Row(NSImage 포함)를 잡지 않고 값만 잡는다
@@ -141,7 +159,7 @@ final class CleanupModel {
         quitStates[id] = sent ? .requested : .force
         rebuild()
         guard sent else { return }
-        let check = Timer(timeInterval: 5, repeats: false) { [weak self] _ in
+        let check = Timer(timeInterval: Self.forceQuitDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.quitStates[id] = self.terminator.isRunning(pid) ? .force : nil
@@ -156,5 +174,11 @@ final class CleanupModel {
         _ = terminator.forceQuit(pid)
         quitStates[row.id] = nil
         rebuild()
+    }
+
+    /// 펼친 줄의 프로세스 하나만 끝낸다. 결과가 바로 보이도록 0.5초 뒤 다시 읽는다.
+    func quit(member: Row.Member) {
+        _ = terminator.terminateProcess(member.pid)
+        schedule(after: 0.5)
     }
 }
