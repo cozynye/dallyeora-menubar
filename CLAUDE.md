@@ -4,8 +4,10 @@ macOS 메뉴 막대 앱. Swift Package (Swift 6, macOS 14+), AppKit `NSStatusIte
 
 - `Sources/DallyeoraCore`: AppKit 없는 로직과 그리기. 여기에 테스트를 붙인다.
 - `Sources/Dallyeora`: 메뉴 막대 UI.
+- `Sources/DallyeoraCore/Processes`: 프로세스 읽기·묶기·순위·사전. 사전 항목은 `CatalogEntries.swift`에 추가하고 `ProcessCatalogTests.catalogCoversTheRequiredNames`의 목록을 함께 갱신한다.
+- `Sources/Dallyeora/Cleanup`: 정리하기 창(SwiftUI를 NSHostingView로).
 - 새 캐릭터: `Sources/DallyeoraCore/Mascots/`에 `Mascot` 구현 추가 → `Mascots.all`에 등록 → `MascotTests`의 순서 테스트 갱신.
 - 그림 좌표는 28×18, y축 아래 방향, 단색.
 
 명령: `swift test`, `swift run Dallyeora`, `scripts/make-app.sh <버전>`
-설계: `docs/spec.md`
+설계: `docs/spec.md`, `docs/spec-cleanup.md`
