@@ -30,4 +30,17 @@ struct MemoryUsageTests {
         let percent = p.map(MemoryUsage.percent) ?? 0
         #expect(percent > 0 && percent <= 100)
     }
+
+    @Test func usedBytesMultipliesPages() {
+        let p = MemoryPages(total: 1000, internal: 350, purgeable: 50, wired: 100, compressed: 100)
+        #expect(MemoryUsage.usedBytes(p, pageSize: 4096) == 500 * 4096)
+    }
+
+    @Test func snapshotIndexesCPUTimeByPID() {
+        let snap = ProcessSnapshot(uptime: 10, samples: [
+            ProcessSample(pid: 1, ppid: 0, uid: 0, name: "a", path: "/a", footprintBytes: 1, cpuTimeNanos: 5),
+            ProcessSample(pid: 2, ppid: 1, uid: 0, name: "b", path: "/b", footprintBytes: 2, cpuTimeNanos: 7),
+        ])
+        #expect(snap.cpuTimeByPID == [1: 5, 2: 7])
+    }
 }

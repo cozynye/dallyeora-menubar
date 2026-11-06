@@ -29,6 +29,10 @@ public enum MemoryUsage {
         guard pages.total > 0 else { return 0 }
         return Usage.clamp(Double(pages.used) / Double(pages.total) * 100)
     }
+    /// 사용 중인 메모리를 바이트로. 정리하기 창에서 시스템 몫을 계산할 때 쓴다.
+    public static func usedBytes(_ pages: MemoryPages, pageSize: UInt64 = UInt64(getpagesize())) -> UInt64 {
+        pages.used * pageSize
+    }
 }
 
 extension MemoryPages {
