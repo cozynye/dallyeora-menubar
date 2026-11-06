@@ -34,6 +34,7 @@ public struct CatalogEntry: Sendable {
 /// 스펙 3.6의 사전과 폴백.
 public enum ProcessCatalog {
     public static let entries: [CatalogEntry] = CatalogEntries.all
+    static let systemLibraryPrefix = "/System/Library/"
 
     public static func describe(_ group: ProcessGroup, bundleID: String?, localizedName: String?) -> ProcessDescription {
         switch group.kind {
@@ -45,8 +46,16 @@ public enum ProcessCatalog {
 
         case .app(let bundlePath, _):
             let folder = ((bundlePath as NSString).lastPathComponent as NSString).deletingPathExtension
+            // /System/Library 아래 .app(WiFiAgent, WallpaperAgent 등 수십 개)은 이름 목록으로 다 못 담아 경로로 막는다.
+            // /System/Applications(계산기, Safari)는 일반 앱이다.
+            let isSystemComponent = bundlePath.hasPrefix(systemLibraryPrefix)
             if let e = bundleID.flatMap(entry(bundleID:)) ?? entry(name: folder) {
-                return ProcessDescription(title: e.title, summary: e.summary, source: .catalog, isProtected: e.isProtected)
+                return ProcessDescription(title: e.title, summary: e.summary, source: .catalog,
+                                          isProtected: e.isProtected || isSystemComponent)
+            }
+            if isSystemComponent {
+                return ProcessDescription(title: localizedName ?? folder, summary: "macOS 구성 요소. 끄면 바로 다시 켜지거나 그 기능이 멈춘다.",
+                                          source: .appName, isProtected: true)
             }
             return ProcessDescription(title: localizedName ?? folder, summary: "Dock이나 메뉴 막대에 보이는 앱. 안 쓰면 꺼도 된다.",
                                       source: .appName, isProtected: false)

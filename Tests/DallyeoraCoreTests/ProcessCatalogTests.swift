@@ -80,6 +80,24 @@ struct ProcessCatalogTests {
         #expect(d.isProtected)
     }
 
+    /// /System/Library 아래 .app은 사전에 없어도, 사전에서 protected가 아니어도 시스템 구성 요소다.
+    @Test func systemLibraryBundlesAreProtected() {
+        let wifi = ProcessCatalog.describe(app("/System/Library/CoreServices/WiFiAgent.app"),
+                                           bundleID: "com.apple.wifi.WiFiAgent", localizedName: "WiFiAgent")
+        #expect(wifi.isProtected)
+        #expect(wifi.title == "WiFiAgent")
+        #expect(wifi.summary == "macOS 구성 요소. 끄면 바로 다시 켜지거나 그 기능이 멈춘다.")
+        #expect(wifi.source == .appName)
+
+        let wallpaper = ProcessCatalog.describe(app("/System/Library/CoreServices/WallpaperAgent.app"), bundleID: nil, localizedName: nil)
+        #expect(wallpaper.isProtected)
+        #expect(wallpaper.source == .catalog)
+
+        let calculator = ProcessCatalog.describe(app("/System/Applications/Calculator.app"),
+                                                 bundleID: "com.apple.calculator", localizedName: "계산기")
+        #expect(!calculator.isProtected)
+    }
+
     @Test func catalogCoversTheRequiredNames() {
         #expect(ProcessCatalog.entries.count >= 100)
         let names = [

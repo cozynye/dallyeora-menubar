@@ -110,13 +110,14 @@ final class CleanupModel {
                        icon: nil, usageText: usage, badge: .others, mainPID: nil, quitState: .idle)
         }
 
-        if case .app(let bundle, let mainPID) = group.kind {
+        if case .app(let bundle, _) = group.kind {
             let description = ProcessCatalog.describe(
                 group, bundleID: AppBundleInfo.bundleID(at: bundle), localizedName: AppBundleInfo.displayName(at: bundle))
-            let badge: Row.Badge = description.isProtected ? .system : (terminator.canQuit(mainPID) ? .quittable : .background)
+            let quitPID = group.quitTarget { terminator.canQuit($0) }
+            let badge: Row.Badge = description.isProtected ? .system : (quitPID != nil ? .quittable : .background)
             return Row(id: group.id, title: description.title, summary: description.summary,
                        icon: terminator.icon(forBundleAt: bundle), usageText: usage, badge: badge,
-                       mainPID: mainPID, quitState: quitStates[group.id] ?? .idle)
+                       mainPID: quitPID, quitState: quitStates[group.id] ?? .idle)
         }
 
         let description = ProcessCatalog.describe(group, bundleID: nil, localizedName: nil)

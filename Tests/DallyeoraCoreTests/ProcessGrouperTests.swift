@@ -102,3 +102,14 @@ struct ProcessGrouperTests {
         #expect(groups[0].kind == .app(bundlePath: Self.chrome, mainPID: 80))
     }
 }
+
+struct ProcessGroupQuitTargetTests {
+    /// Docker.app은 Contents/MacOS 바로 아래에 백엔드가 있고 GUI는 안쪽 .app이라 mainPID가 GUI가 아니다.
+    /// 종료 대상은 끌 수 있는(LaunchServices에 등록된) 첫 pid로 다시 고른다.
+    @Test func quitTargetIsTheLowestQuittablePID() {
+        let docker = ProcessGroup(id: "/Applications/Docker.app", kind: .app(bundlePath: "/Applications/Docker.app", mainPID: 410),
+                                  pids: [420, 410, 415], footprintBytes: 0, cpuTimeNanos: 0)
+        #expect(docker.quitTarget { $0 == 415 || $0 == 420 } == 415)
+        #expect(docker.quitTarget { _ in false } == nil)
+    }
+}

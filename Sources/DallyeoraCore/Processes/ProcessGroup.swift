@@ -24,4 +24,11 @@ public struct ProcessGroup: Equatable, Sendable {
         self.footprintBytes = footprintBytes
         self.cpuTimeNanos = cpuTimeNanos
     }
+
+    /// 종료 명령을 보낼 pid. `mainPID`는 경로만 보고 고르기 때문에 Docker.app처럼
+    /// Contents/MacOS 바로 아래에 백엔드를 두고 GUI를 안쪽 .app에 넣은 앱에서는 GUI가 아닐 수 있다.
+    /// 그래서 끌 수 있는지(`canQuit`)를 pid 순으로 물어 첫 번째를 쓴다. 없으면 nil.
+    public func quitTarget(where canQuit: (pid_t) -> Bool) -> pid_t? {
+        pids.sorted().first(where: canQuit)
+    }
 }
