@@ -5,6 +5,8 @@ public struct UsageSampler {
     private var lastTicks: CPUTicks?
     private var cpu: Double = 0
     private var memory: Double = 0
+    private var cpuMeasured = false
+    private var memoryMeasured = false
 
     public init(
         readCPU: @escaping () -> CPUTicks? = CPUTicks.current,
@@ -19,11 +21,21 @@ public struct UsageSampler {
         if let now = readCPU() {
             if let last = lastTicks {
                 cpu = CPUUsage.percent(from: last, to: now)
+                cpuMeasured = true
             }
             lastTicks = now
         }
         if let pages = readMemory() {
             memory = MemoryUsage.percent(pages)
+            memoryMeasured = true
+        }
+    }
+
+    /// 한 번이라도 실제로 잰 값인지. CPU는 두 번째 측정부터다. 그 전의 0은 값이 아니다.
+    public func isMeasured(_ metric: Metric) -> Bool {
+        switch metric {
+        case .cpu: cpuMeasured
+        case .memory: memoryMeasured
         }
     }
 

@@ -14,6 +14,22 @@ struct UsageSamplerTests {
         #expect(sampler.value(for: .cpu) == 30)
     }
 
+    @Test func cpuIsNotMeasuredUntilTheSecondReading() {
+        var ticks = [
+            CPUTicks(user: 0, system: 0, idle: 0, nice: 0),
+            CPUTicks(user: 30, system: 0, idle: 70, nice: 0),
+        ]
+        let pages = MemoryPages(total: 100, internal: 40, purgeable: 0, wired: 0, compressed: 0)
+        var sampler = UsageSampler(readCPU: { ticks.removeFirst() }, readMemory: { pages })
+        #expect(sampler.isMeasured(.cpu) == false)
+        #expect(sampler.isMeasured(.memory) == false)
+        sampler.sample()
+        #expect(sampler.isMeasured(.cpu) == false, "첫 0%는 잰 값이 아니다")
+        #expect(sampler.isMeasured(.memory))
+        sampler.sample()
+        #expect(sampler.isMeasured(.cpu))
+    }
+
     @Test func memoryIsReadEverySample() {
         let pages = MemoryPages(total: 100, internal: 40, purgeable: 0, wired: 0, compressed: 0)
         var sampler = UsageSampler(readCPU: { nil }, readMemory: { pages })

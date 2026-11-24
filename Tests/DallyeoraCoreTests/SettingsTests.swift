@@ -47,4 +47,48 @@ struct SettingsTests {
     @Test func metricLabels() {
         #expect(Metric.allCases.map(\.label) == ["CPU", "메모리"])
     }
+
+    @Test func showsPercentDefaultsOffAndPersists() {
+        let s = Settings(defaults: defaults)
+        #expect(s.showsPercent == false)
+        s.showsPercent = true
+        #expect(Settings(defaults: defaults).showsPercent == true)
+    }
+
+    @Test func checksForUpdatesDefaultsOnAndPersists() {
+        let s = Settings(defaults: defaults)
+        #expect(s.checksForUpdates == true)
+        s.checksForUpdates = false
+        #expect(Settings(defaults: defaults).checksForUpdates == false)
+    }
+
+    @Test func notifiesOncePerRealChange() {
+        let s = Settings(defaults: defaults)
+        let count = Counter()
+        let token = NotificationCenter.default.addObserver(forName: Settings.didChange, object: s, queue: nil) { _ in
+            count.value += 1
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        s.metric = .memory
+        s.tone = .gyeongsang
+        s.mascotID = "pork"
+        s.showsPhrase = true
+        s.showsPercent = true
+        #expect(count.value == 5)
+    }
+
+    @Test func sameValueDoesNotNotify() {
+        let s = Settings(defaults: defaults)
+        s.metric = .memory
+        let count = Counter()
+        let token = NotificationCenter.default.addObserver(forName: Settings.didChange, object: s, queue: nil) { _ in
+            count.value += 1
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        s.metric = .memory
+        s.showsPhrase = false
+        #expect(count.value == 0, "같은 값을 다시 쓰면 창과 메뉴가 서로를 깨우지 않는다")
+    }
 }
+
+private final class Counter: @unchecked Sendable { var value = 0 }

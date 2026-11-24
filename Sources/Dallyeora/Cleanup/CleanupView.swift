@@ -3,43 +3,76 @@ import SwiftUI
 
 struct CleanupView: View {
     @Bindable var model: CleanupModel
-    /// 강제 종료 확인 창은 AppKit NSAlert로 띄운다(SwiftUI alert보다 메뉴 막대 앱에서 안정적).
+    /// 확인 창은 AppKit NSAlert로 띄운다(SwiftUI alert보다 메뉴 막대 앱에서 안정적).
     let confirmForceQuit: (CleanupModel.Row) -> Void
+    let confirmQuitMember: (CleanupModel.Row.Member) -> Void
     /// 펼쳐 둔 줄. 갱신으로 줄이 다시 만들어져도 id가 같아 유지된다.
     @State private var expanded: Set<String> = []
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("지표", selection: $model.metric) {
-                ForEach(Metric.allCases, id: \.self) { Text($0.label).tag($0) }
+            HStack {
+                Picker("지표", selection: $model.metric) {
+                    ForEach(Metric.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 180)
+                Spacer()
+                TextField("검색", text: $model.query)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .focused($searchFocused)
+                    .onExitCommand { model.query = "" }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 180)
 
             Text(model.totalText).font(.headline)
 
-            if model.failed {
-                Spacer()
-                Text("프로세스 정보를 읽을 수 없습니다").frame(maxWidth: .infinity)
-                Spacer()
-            } else {
-                List(model.rows) { row in
-                    if row.members.isEmpty {
-                        header(row)
-                    } else {
-                        DisclosureGroup(isExpanded: isExpanded(row.id)) {
-                            MemberList(members: row.members, quit: { model.quit(member: $0) })
-                        } label: {
+            // 누르려는 줄이 갱신 때문에 움직이지 않게, 마우스가 올라가 있는 동안에는 순서를 붙잡는다.
+            // 목록이 안내 글자로 바뀌어도 벗어남을 놓치지 않도록 늘 있는 바깥 뷰에 건다.
+            ZStack {
+                if model.failed {
+                    placeholder("프로세스 정보를 읽을 수 없습니다")
+                } else if let emptyText = model.emptyText {
+                    placeholder(emptyText)
+                } else {
+                    List(model.rows) { row in
+                        if row.members.isEmpty {
                             header(row)
+                        } else {
+                            DisclosureGroup(isExpanded: isExpanded(row.id)) {
+                                MemberList(members: row.members, quit: confirmQuitMember)
+                            } label: {
+                                header(row)
+                            }
                         }
                     }
+                    .listStyle(.inset)
                 }
-                .listStyle(.inset)
             }
+            .onHover { model.isHovering = $0 }
+
+            // 비어 있을 때도 한 줄을 차지해 목록 높이가 흔들리지 않게 한다.
+            Text(model.notice ?? " ").font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding()
         .frame(minWidth: 480, minHeight: 360)
+        // ⌘F로 검색 칸에 포커스를 준다. 보이지 않는 버튼에 단축키만 건다.
+        .background {
+            Button("검색") { searchFocused = true }
+                .keyboardShortcut("f")
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        VStack {
+            Spacer()
+            Text(text).frame(maxWidth: .infinity)
+            Spacer()
+        }
     }
 
     private func header(_ row: CleanupModel.Row) -> some View {

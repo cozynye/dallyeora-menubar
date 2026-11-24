@@ -1,4 +1,5 @@
 import AppKit
+import DallyeoraCore
 
 /// NSRunningApplication 감싸기. 스펙 3.7의 종료 가능 판정과 종료 명령.
 @MainActor
@@ -23,8 +24,9 @@ struct AppTerminator {
     }
 
     /// 보조 프로세스 하나를 SIGTERM으로 끝낸다. 내 계정 프로세스만 권한이 있다.
-    func terminateProcess(_ pid: pid_t) -> Bool {
-        kill(pid, SIGTERM) == 0
+    func terminateProcess(_ pid: pid_t) -> SignalResult {
+        let result = kill(pid, SIGTERM)
+        return SignalResult(killResult: result, errno: errno)
     }
 
     func isRunning(_ pid: pid_t) -> Bool {

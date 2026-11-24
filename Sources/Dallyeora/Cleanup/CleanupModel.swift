@@ -8,7 +8,7 @@ import Observation
 final class CleanupModel {
     struct Row: Identifiable {
         enum Badge { case quittable, background, system }
-        enum QuitState { case idle, requested, force }
+        typealias QuitState = QuitTracker.State
 
         /// 줄을 펼치면 보이는 프로세스 하나.
         struct Member: Identifiable {
@@ -34,25 +34,64 @@ final class CleanupModel {
     /// 종료를 요청한 뒤 이 시간이 지나도 살아 있으면 강제 종료 버튼으로 바꾼다. VS Code는 다 꺼지는 데 5초쯤 걸린다.
     static let forceQuitDelay: TimeInterval = 10
 
+    /// 메뉴 막대와 같은 설정을 쓴다. 여기서 바꾸면 캐릭터가 반응하는 지표도 바뀐다.
     var metric: Metric {
-        didSet { rebuild() }
+        didSet {
+            guard metric != oldValue else { return }
+            settings.metric = metric
+            if isHovering { freeze(rows: nil) } // 지표가 바뀌면 붙잡아 둔 순서는 의미가 없다
+            rebuild()
+        }
+    }
+    /// 검색어. 제목·설명·프로세스 이름에서 찾는다.
+    var query = "" {
+        didSet { if query != oldValue { rebuild() } }
+    }
+    /// 마우스가 목록 위에 있는 동안에는 줄 순서를 붙잡아 둔다.
+    var isHovering = false {
+        didSet {
+            guard isHovering != oldValue else { return }
+            freeze(rows: isHovering ? allRows : nil)
+            if !isHovering { rebuild() }
+        }
     }
     private(set) var rows: [Row] = []
     private(set) var totalText = ""
     private(set) var failed = false
+    /// 아래 상태 줄에 잠깐 보이는 마지막 결과.
+    private(set) var notice: String?
+    /// 검색어에 맞는 줄이 없을 때 목록 자리에 보여 줄 글자.
+    private(set) var emptyText: String?
 
+    private let settings: Settings
     private let terminator = AppTerminator()
+    private var settingsObserver: NSObjectProtocol?
     private var previous: ProcessSnapshot?
     private var current: ProcessSnapshot?
     private var lastTicks: CPUTicks?
     private var totalCPU: Double?
     private var memoryPercent: Double = 0
     private var memoryBytes: UInt64 = 0
-    private var quitStates: [String: Row.QuitState] = [:]
+    /// 줄마다의 종료 흐름(요청됨, 강제 종료 가능). 전이는 `QuitTracker`가 정한다.
+    private var quits = QuitTracker()
+    /// 검색으로 거르기 전의 전체 줄.
+    private var allRows: [Row] = []
+    private var frozenRowIDs: [String]?
+    private var frozenMemberPIDs: [String: [pid_t]] = [:]
     private var timer: Timer?
+    private var noticeTimer: Timer?
 
-    init(metric: Metric) {
-        self.metric = metric
+    init(settings: Settings) {
+        self.settings = settings
+        metric = settings.metric
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: Settings.didChange, object: settings, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.metric != settings.metric else { return }
+                self.metric = settings.metric
+            }
+        }
     }
 
     // MARK: 갱신
@@ -66,6 +105,15 @@ final class CleanupModel {
     func stop() {
         timer?.invalidate()
         timer = nil
+    }
+
+    /// 창을 닫을 때 검색어와 붙잡아 둔 순서, 상태 줄, 기다리던 종료 요청을 비운다.
+    func clearTransientState() {
+        quits.reset()
+        isHovering = false
+        query = ""
+        noticeTimer?.invalidate()
+        notice = nil
     }
 
     private func schedule(after interval: TimeInterval) {
@@ -108,11 +156,28 @@ final class CleanupModel {
             cpuCount: ProcessInfo.processInfo.activeProcessorCount,
             totals: .init(cpuPercent: totalCPU, memoryBytes: memoryBytes), metric: metric)
         let windows = terminator.windowCounts()
-        rows = ranked.map { makeRow($0, windows: windows) }
-        let liveIDs = Set(rows.map(\.id))
-        quitStates = quitStates.filter { liveIDs.contains($0.key) }
+        let built = ranked.map { makeRow($0, windows: windows) }
+        let byID = Dictionary(built.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        // 종료를 요청해 둔 줄이 목록에서 사라졌으면 꺼진 것이다.
+        for notice in quits.rowsDidChange(present: Set(byID.keys)) { post(notice) }
+
+        allRows = StableOrder.arrange(built.map(\.id), keeping: frozenRowIDs).compactMap { byID[$0] }
+        if isHovering { freeze(rows: allRows) } // 그사이 생긴 줄도 붙은 자리에 그대로 둔다
+        rows = allRows.filter { row in
+            RowFilter.matches(query: query, in: [row.title, row.summary] + row.members.map(\.name))
+        }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        emptyText = rows.isEmpty && !trimmed.isEmpty ? "'\(trimmed)'에 맞는 항목이 없습니다" : nil
         let total = metric == .cpu ? (totalCPU.map(UsageFormat.percent) ?? "측정 중…") : UsageFormat.percent(memoryPercent)
         totalText = "지금 \(metric.label)를 많이 쓰는 것 · 전체 \(total)"
+    }
+
+    /// 지금 보이는 줄 순서와 줄 안의 프로세스 순서를 기억한다. nil이면 잊는다.
+    private func freeze(rows: [Row]?) {
+        frozenRowIDs = rows?.map(\.id)
+        frozenMemberPIDs = Dictionary(
+            (rows ?? []).map { ($0.id, $0.members.map(\.pid)) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func usageText(cpuPercent: Double?, memoryBytes: UInt64) -> String {
@@ -122,9 +187,13 @@ final class CleanupModel {
     private func makeRow(_ ranked: RankedRow, windows: [pid_t: Int]) -> Row {
         let group = ranked.group
         let usage = usageText(cpuPercent: ranked.cpuPercent, memoryBytes: ranked.memoryBytes)
-        let members = ranked.members.map {
-            Row.Member(pid: $0.pid, name: $0.name, usageText: usageText(cpuPercent: $0.cpuPercent, memoryBytes: $0.memoryBytes))
-        }
+        let byPID = Dictionary(ranked.members.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        let members = StableOrder.arrange(ranked.members.map(\.pid), keeping: frozenMemberPIDs[group.id])
+            .compactMap { byPID[$0] }
+            .map {
+                Row.Member(pid: $0.pid, name: $0.name,
+                           usageText: usageText(cpuPercent: $0.cpuPercent, memoryBytes: $0.memoryBytes))
+            }
 
         if case .app(let bundle, _) = group.kind {
             let description = ProcessCatalog.describe(
@@ -134,7 +203,7 @@ final class CleanupModel {
             let windowCount = group.pids.reduce(0) { $0 + (windows[$1] ?? 0) }
             return Row(id: group.id, title: description.title, summary: description.summary,
                        icon: terminator.icon(forBundleAt: bundle), usageText: usage, badge: badge,
-                       windowCount: windowCount, mainPID: quitPID, quitState: quitStates[group.id] ?? .idle,
+                       windowCount: windowCount, mainPID: quitPID, quitState: quits.state(of: group.id),
                        members: members)
         }
 
@@ -143,6 +212,19 @@ final class CleanupModel {
         let title = ranked.kind == .background && ranked.count > 1 ? "\(description.title) ×\(ranked.count)" : description.title
         return Row(id: group.id, title: title, summary: description.summary, icon: nil, usageText: usage,
                    badge: badge, windowCount: 0, mainPID: nil, quitState: .idle, members: members)
+    }
+
+    // MARK: 상태 줄
+
+    /// 결과를 `CleanupNotice.duration` 동안 보여 준다. 새 결과가 오면 바꿔 쓰고 시간을 다시 센다.
+    private func post(_ result: CleanupNotice) {
+        notice = result.text
+        noticeTimer?.invalidate()
+        let timer = Timer(timeInterval: CleanupNotice.duration, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.notice = nil }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        noticeTimer = timer
     }
 
     // MARK: 종료
@@ -154,15 +236,17 @@ final class CleanupModel {
     /// 일반 종료. `forceQuitDelay` 뒤에도 살아 있으면 강제 종료 버튼으로 바뀐다.
     func quit(_ row: Row) {
         guard let pid = row.mainPID else { return }
-        let id = row.id // Timer 블록은 @Sendable이라 Row(NSImage 포함)를 잡지 않고 값만 잡는다
-        let sent = terminator.quit(pid)
-        quitStates[id] = sent ? .requested : .force
+        let (ticket, notice) = quits.request(id: row.id, name: row.title, sent: terminator.quit(pid))
+        if let notice { post(notice) }
         rebuild()
-        guard sent else { return }
+        guard let ticket else { return }
         let check = Timer(timeInterval: Self.forceQuitDelay, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
-                self.quitStates[id] = self.terminator.isRunning(pid) ? .force : nil
+                // 그사이 줄이 사라졌거나 새로 요청했으면 표가 맞지 않아 아무 일도 없다.
+                guard let self,
+                      let notice = self.quits.deadlinePassed(ticket, isRunning: self.terminator.isRunning(pid))
+                else { return }
+                self.post(notice)
                 self.rebuild()
             }
         }
@@ -171,14 +255,31 @@ final class CleanupModel {
 
     func forceQuit(_ row: Row) {
         guard let pid = row.mainPID else { return }
-        _ = terminator.forceQuit(pid)
-        quitStates[row.id] = nil
+        post(quits.forceQuit(id: row.id, name: row.title, done: terminator.forceQuit(pid)))
         rebuild()
     }
 
-    /// 펼친 줄의 프로세스 하나만 끝낸다. 결과가 바로 보이도록 0.5초 뒤 다시 읽는다.
+    /// 펼친 줄의 프로세스 하나만 끝낸다. 신호를 보냈으면 0.5초 뒤 다시 읽어 정말 끝났는지 본다.
     func quit(member: Row.Member) {
-        _ = terminator.terminateProcess(member.pid)
-        schedule(after: 0.5)
+        let (pid, name) = (member.pid, member.name)
+        switch terminator.terminateProcess(pid) {
+        case .notPermitted:
+            post(.processNotPermitted(name: name, pid: pid))
+        case .noSuchProcess:
+            post(.processAlreadyGone(name: name, pid: pid))
+            refresh()
+        case .failed:
+            post(.processFailed(name: name, pid: pid))
+        case .sent:
+            let check = Timer(timeInterval: 0.5, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.refresh()
+                    self.post(self.terminator.isRunning(pid)
+                        ? .processStillRunning(name: name, pid: pid) : .processEnded(name: name, pid: pid))
+                }
+            }
+            RunLoop.main.add(check, forMode: .common)
+        }
     }
 }

@@ -7,17 +7,27 @@ public struct PhraseFlash: Sendable {
     public static let duration: TimeInterval = 3
 
     private var lastTier: Int?
+    /// 단계가 바뀌어 대사를 잠깐 보여 주는 중. `expire`나 `reset`으로 끝난다.
+    public private(set) var isFlashing = false
 
     public init() {}
 
-    /// 단계를 기록하고, 직전 단계와 다르면 true.
-    public mutating func shouldFlash(tier: Int) -> Bool {
+    /// 단계를 기록하고, 직전 단계와 달라 대사를 띄워야 하면 true. 이때부터 `isFlashing`이다.
+    /// 대사를 늘 켜 둔 동안(`pinned`)에는 띄울 것이 없어 기록만 한다.
+    public mutating func shouldFlash(tier: Int, pinned: Bool = false) -> Bool {
         defer { lastTier = tier }
-        guard let last = lastTier else { return false }
-        return tier != last
+        guard let last = lastTier, tier != last, !pinned else { return false }
+        isFlashing = true
+        return true
+    }
+
+    /// `duration`이 지났을 때.
+    public mutating func expire() {
+        isFlashing = false
     }
 
     public mutating func reset() {
         lastTier = nil
+        isFlashing = false
     }
 }
